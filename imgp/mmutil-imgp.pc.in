@@ -1,0 +1,12 @@
+prefix = @prefix@
+exec_prefix=@exec_prefix@
+libdir = @libdir@
+includedir = @includedir@
+
+Name : mmutil-imgp
+Description : Multimedia Framework Utility Library
+Requires : @IMGP_REQPKG@
+Version : @VERSION@
+Libs : -L${libdir} -lmmutil_imgp
+Cflags : -I${includedir}/mmf
+

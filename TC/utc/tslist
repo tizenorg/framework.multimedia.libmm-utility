@@ -1,0 +1,7 @@
+./utc_mm_util_convert_colorspace_func
+./utc_mm_util_resize_image_func
+./utc_mm_util_rotate_image_func
+./utc_mm_util_jpeg_encode_to_file_func
+./utc_mm_util_jpeg_encode_to_memory_func
+./utc_mm_util_decode_from_jpeg_file_func
+./utc_mm_util_decode_from_jpeg_memory_func
