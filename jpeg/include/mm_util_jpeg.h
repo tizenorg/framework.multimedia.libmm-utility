@@ -55,6 +55,9 @@ typedef enum
 	MM_UTIL_JPEG_FMT_NV21,             /**< YUV format - YUV420 semi-planar (NV21) */
 	MM_UTIL_JPEG_FMT_NV16,             /**< YUV format - YUV422 semi-planar (NV16) */
 	MM_UTIL_JPEG_FMT_NV61,             /**< YUV format - YUV422 semi-planar (NV61) */
+	MM_UTIL_JPEG_FMT_RGBA8888,     /**< RGBA8888 format */
+	MM_UTIL_JPEG_FMT_BGRA8888,     /**< BGRA8888 format */
+	MM_UTIL_JPEG_FMT_ARGB8888,     /**< ARGB8888 format */
 } mm_util_jpeg_yuv_format;
 
 /**

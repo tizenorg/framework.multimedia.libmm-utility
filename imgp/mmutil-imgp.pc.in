@@ -5,7 +5,7 @@ includedir = @includedir@
 
 Name : mmutil-imgp
 Description : Multimedia Framework Utility Library
-Requires : @IMGP_REQPKG@
+Requires : @IMGP_REQPKG@ capi-media-tool mm-common
 Version : @VERSION@
 Libs : -L${libdir} -lmmutil_imgp
 Cflags : -I${includedir}/mmf

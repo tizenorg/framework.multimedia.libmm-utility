@@ -26,6 +26,10 @@
 extern "C" {
 #endif
 
+#include <mm_types.h>
+#include <media_packet.h>
+
+typedef bool (*mm_util_completed_callback)(media_packet_h *dst, int error, void *user_param);
 /**
     @addtogroup UTILITY
     @{
@@ -59,6 +63,8 @@ typedef enum
 	MM_UTIL_IMG_FMT_BGRX8888,      /**<BGRX8888 pixel format */
 	/* non-standard format */
 	MM_UTIL_IMG_FMT_NV12_TILED,     /**< Customized color format in s5pc110 */
+	MM_UTIL_IMG_FMT_NV16,     /**<NV16 pixel format */
+	MM_UTIL_IMG_FMT_NV61,     /**<NV61 pixel format */
 	MM_UTIL_IMG_FMT_NUM,            /**< Number of image formats */
 } mm_util_img_format;
 
@@ -92,6 +98,139 @@ typedef enum
  */
 int
 mm_util_get_image_size(mm_util_img_format format, unsigned int width, unsigned int height, unsigned int *size);
+
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]			MMHandleType pointer
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+int
+mm_util_create(MMHandleType* MMHandle);
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]			MMHandleType pointer
+ * @param	mode			[in]			User can use the accelerated image processing
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+int
+mm_util_set_hardware_acceleration(MMHandleType MMHandle, bool mode);
+
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]		MMHandleType pointer
+ * @param	colorspace	[in]			colorspace The colorspace of the destination image buffer
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+int
+mm_util_set_colorspace_convert(MMHandleType MMHandle, mm_util_img_format colorspace);
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]		MMHandleType pointer
+ * @param	width		[in]			width The width of destination image buffer
+ * @param	height		[in]			height The height of destination image buffer
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+int
+mm_util_set_resolution(MMHandleType MMHandle, unsigned int width, unsigned int height);
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]			MMHandleType pointer
+ * @param	rotation		[in]			dest_rotation The rotation value of destination image buffer
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+int
+mm_util_set_rotation(MMHandleType MMHandle, mm_util_img_rotate_type rotation);
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]			MMHandleType pointer
+ * @param	start_x			[in]			The start x position of cropped image buffer
+ * @param	start_y			[in]			The start y position of cropped image buffer
+ * @param	end_x			[in]			The start x position of cropped image buffer
+ * @param	end_y			[in]			The start y position of cropped image buffer
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+int
+mm_util_set_crop_area(MMHandleType MMHandle, unsigned int start_x, unsigned int start_y, unsigned int end_x, unsigned int end_y);
+
+/**
+ *
+ * @remark 	Transform Handle Creation
+ *
+ * @param	MMHandle		[in]			MMHandleType pointer
+ * @param	is_completed		[in/out]		Users can obtain the value of the conversion about whether to complete
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle creation succeed
+ *		else if the result is -1, then handle creation failed
+ */
+
+int
+mm_transform_is_completed(MMHandleType MMHandle, bool *is_completed);
+
+/**
+ *
+ * @remark 	Image Transform Pipeline
+ *
+ * @param	MMHandle						[in]			MMHandleType
+ * @param	completed_callback					[in]			Completed_callback
+ * @param	user_param						[in]			User parameter which is received from user when callback function was set
+
+ * @return 	This function returns transcode processor result value
+ *		if the result is 0, then you can use output_Filename pointer(char** value)
+ *		else if the result is -1, then do not execute when the colopsapce converter is not supported
+ */
+int
+mm_util_transform(MMHandleType MMHandle, media_packet_h src, mm_util_completed_callback completed_callback, void * user_data);
+
+
+/**
+ *
+ * @remark 	Transform Handle Destory
+ *
+ * @param	MMHandle		[in]			MMHandleType
+
+ * @return 	This function returns transform processor result value
+ *		if the result is 0, then handle destory succeed
+ *		else if the result is -1, then handle destory failed
+ */
+int
+mm_util_destroy(MMHandleType MMHandle);
 
 
 /**
@@ -184,4 +323,3 @@ mm_util_crop_image(unsigned char *src, unsigned int src_width, unsigned int src_
 #endif
 
 #endif	/*__MM_UTILITY_IMGP_H__*/
-

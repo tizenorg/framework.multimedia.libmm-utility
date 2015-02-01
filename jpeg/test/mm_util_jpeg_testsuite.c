@@ -27,7 +27,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <mm_util_jpeg.h>
-#include <mm_ta.h>
 #include <mm_error.h>
 #include <mm_debug.h>
 #define ENCODE_RESULT_PATH "/opt/usr/media/encode_test.jpg"
@@ -144,7 +143,6 @@ int main(int argc, char *argv[])
 
 	/*g_type_init();  //when you include WINK */
 
-	MMTA_INIT();
 
 	if (!strcmp("encode", argv[1])) {
 		if (_read_file(argv[2], &src, &src_size)) {
@@ -153,18 +151,14 @@ int main(int argc, char *argv[])
 			quality = atoi(argv[5]);
 			fmt = atoi(argv[6]);
 
-			__ta__("mm_util_jpeg_encode_to_memory",
 			ret = mm_util_jpeg_encode_to_memory(&dst, &dst_size, src, width, height, fmt, quality);
-			);
 		} else {
 			ret = MM_ERROR_IMAGE_INTERNAL;
 		}
 	} else if (!strcmp("decode", argv[1])) {
 		if (_read_file(argv[2], &src, &src_size)) {
 			fmt = atoi(argv[3]);
-			__ta__("mm_util_decode_from_jpeg_memory",
 			ret = mm_util_decode_from_jpeg_memory(&decoded_data, src, src_size, fmt);
-			);
 
 			free(src);
 			src = NULL;
@@ -198,9 +192,9 @@ int main(int argc, char *argv[])
 				                decoded_data.data, decoded_data.width, decoded_data.height, decoded_data.size);
 				char filename[BUFFER_SIZE];
 				memset(filename, 0, BUFFER_SIZE);
-				if(fmt == MM_UTIL_JPEG_FMT_RGB888) {
+				if(fmt == MM_UTIL_JPEG_FMT_RGB888 || fmt == MM_UTIL_JPEG_FMT_RGBA8888 || fmt == MM_UTIL_JPEG_FMT_BGRA8888 || fmt == MM_UTIL_JPEG_FMT_ARGB8888) {
 					sprintf(filename, "%s%s", DECODE_RESULT_PATH, "rgb");
-				} else if((fmt == MM_UTIL_JPEG_FMT_YUV420) || 
+				} else if((fmt == MM_UTIL_JPEG_FMT_YUV420) ||
 					(fmt == MM_UTIL_JPEG_FMT_NV12) ||
 					(fmt == MM_UTIL_JPEG_FMT_NV21) ||
 					(fmt == MM_UTIL_JPEG_FMT_NV16) ||
@@ -218,8 +212,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	MMTA_ACUM_ITEM_SHOW_RESULT();
-	MMTA_RELEASE ();
 
 	return 0;
 }

@@ -1,7 +1,7 @@
 Name:       libmm-utility
 Summary:    Multimedia Framework Utility Library
-Version:    0.7
-Release:    19
+Version:    0.31
+Release:    0
 Group:      System/Libraries
 License:    Apache
 Source0:    %{name}-%{version}.tar.gz
@@ -9,11 +9,13 @@ Requires(post):  /sbin/ldconfig
 Requires(postun):  /sbin/ldconfig
 BuildRequires:  pkgconfig(mm-common)
 BuildRequires:  pkgconfig(mm-log)
-BuildRequires:  pkgconfig(mm-ta)
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(gmodule-2.0)
 BuildRequires:  libjpeg-turbo-devel
-
+BuildRequires:  pkgconfig(capi-media-tool)
+BuildRequires:  pkgconfig(libtbm)
+BuildRequires:  pkgconfig(libexif)
+BuildRequires:  pkgconfig(capi-system-info)
 BuildRoot:  %{_tmppath}/%{name}-%{version}-build
 
 %description
@@ -42,6 +44,7 @@ Requires:   %{name} = %{version}-%{release}
 CFLAGS="$CFLAGS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" -D_MM_PROJECT_FLOATER" \
 LDFLAGS+="-Wl,--rpath=%{_prefix}/lib -Wl,--hash-style=both -Wl,--as-needed" \
 ./configure --prefix=%{_prefix}
+
 make %{?jobs:-j%jobs}
 
 sed -i -e "s#@IMGP_REQPKG@#$IMGP_REQPKG#g" imgp/mmutil-imgp.pc

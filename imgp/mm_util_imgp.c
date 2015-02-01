@@ -34,8 +34,7 @@
 #define DIV_ROUND_UP_X(v,x) (((v) + GEN_MASK(x)) >> (x))
 #define GST "gstcs"
 
-typedef gboolean(*IMGPInfoFunc) (imgp_info_s*, unsigned char*, unsigned char*, imgp_plugin_type_e);
-/*########################################################################################*/
+typedef gboolean(*IMGPInfoFunc) (imgp_info_s*, const unsigned char*, unsigned char*, imgp_plugin_type_e);
 
 static int
 check_valid_picture_size(int width, int height)
@@ -51,7 +50,8 @@ _mm_cannot_convert_format(mm_util_img_format src_format, mm_util_img_format dst_
 {
 	gboolean _bool=FALSE;
 	debug_log("src_format: %d, dst_format:%d", src_format, dst_format);
-	if(((src_format == MM_UTIL_IMG_FMT_YUV422) && (dst_format == MM_UTIL_IMG_FMT_NV12_TILED)) ||
+	if((dst_format == MM_UTIL_IMG_FMT_NV16) || (dst_format == MM_UTIL_IMG_FMT_NV61) ||
+		((src_format == MM_UTIL_IMG_FMT_YUV422) && (dst_format == MM_UTIL_IMG_FMT_NV12_TILED)) ||
 
 		((src_format == MM_UTIL_IMG_FMT_NV12) && (dst_format == MM_UTIL_IMG_FMT_NV12_TILED)) ||
 
@@ -180,7 +180,7 @@ _mm_select_rotate_plugin(mm_util_img_format _format, unsigned int width, unsigne
 	debug_log("_format: %d (angle: %d)", _format, angle);
 
 	if((_format == MM_UTIL_IMG_FMT_YUV420) || (_format == MM_UTIL_IMG_FMT_I420) || (_format == MM_UTIL_IMG_FMT_NV12)
-		||(( _format == MM_UTIL_IMG_FMT_RGB888 ||_format == MM_UTIL_IMG_FMT_RGB565) && angle == MM_UTIL_ROTATE_90)) { /* constraint of image processing because MM_UTIL_ROTATE_180 may be twice MM_UTIL_ROTATE_90 */
+		||(_format == MM_UTIL_IMG_FMT_RGB888 ||_format == MM_UTIL_IMG_FMT_RGB565)) {
 		return TRUE;
 	}
 
@@ -271,7 +271,7 @@ _mm_set_format_label(imgp_info_s * _imgp_info_s, mm_util_img_format src_format, 
 			src_fmt_lable = "RGB888";
 			break;
 		case MM_UTIL_IMG_FMT_ARGB8888:
-			src_fmt_lable = "ARGB888";
+			src_fmt_lable = "ARGB8888";
 			break;
 		case MM_UTIL_IMG_FMT_BGRA8888:
 			src_fmt_lable = "BGRA8888";
@@ -448,7 +448,7 @@ _mm_util_imgp_finalize(GModule *module, imgp_info_s *_imgp_info_s)
 }
 
 static int
-_mm_util_crop_rgba32(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+_mm_util_crop_rgba32(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
 unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_width, unsigned int crop_dest_height, unsigned char *dst)
 {
 	int ret = MM_ERROR_NONE;
@@ -470,7 +470,7 @@ unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_wid
 }
 
 static int
-_mm_util_crop_rgb888(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+_mm_util_crop_rgb888(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
 unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_width, unsigned int crop_dest_height, unsigned char *dst)
 {
 	int ret = MM_ERROR_NONE;
@@ -492,7 +492,7 @@ unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_wid
 }
 
 static int
-_mm_util_crop_rgb565(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+_mm_util_crop_rgb565(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
 unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_width, unsigned int crop_dest_height, unsigned char *dst)
 {
 	int ret = MM_ERROR_NONE;
@@ -514,7 +514,7 @@ unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_wid
 }
 
 static int
-_mm_util_crop_yuv420(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+_mm_util_crop_yuv420(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
 unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_width, unsigned int crop_dest_height, unsigned char *dst)
 {
 	int ret = MM_ERROR_NONE;
@@ -523,7 +523,7 @@ unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_wid
 	int start_y = crop_start_y;
 	debug_log("[Input] src: 0x%2x src, src_width: %d src_height: %d src_format: %d crop_start_x: %d crop_start_y: %d crop_dest_width: %d crop_dest_height: %d\n",
 	src, src_width, src_height, src_format, crop_start_x, crop_start_y, crop_dest_width, crop_dest_height);
-	unsigned char *_src = src + start_y * src_width + start_x;
+	const unsigned char *_src = src + start_y * src_width + start_x;
 
 	/* Y */
 	for (i = 0; i < crop_dest_height; i++) {
@@ -551,6 +551,645 @@ unsigned int crop_start_x, unsigned int crop_start_y, unsigned int crop_dest_wid
 	return ret;
 }
 
+static bool
+_mm_util_check_resolution(unsigned int width, unsigned int height)
+{
+	if(width == 0)
+	{
+		debug_error("invalid width [%d]", width);
+		return false;
+	}
+
+	if(height == 0)
+	{
+		debug_error("invalid height [%d]", height);
+		return false;
+	}
+
+	return true;
+}
+
+static int
+_mm_util_handle_init(mm_util_s *handle)
+{
+	int ret = MM_ERROR_NONE;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	/* private values init */
+	handle->src = 0;
+	handle->dst = 0;
+	handle->drm_fd = -1;
+	handle->dst_format = -1;
+	handle->dst_format_mime = -1;
+	handle->src_buf_idx = 0;
+	handle->dst_buf_idx = 0;
+
+	handle->start_x = -1;
+	handle->start_y = -1;
+	handle->is_completed = FALSE;
+
+	return ret;
+}
+
+
+media_format_mimetype_e
+_mm_util_mapping_imgp_format_to_mime(mm_util_img_format format)
+{
+	media_format_mimetype_e mimetype = -1;
+
+	switch(format) {
+		case MM_UTIL_IMG_FMT_NV12 :
+			mimetype = MEDIA_FORMAT_NV12;
+			break;
+		case MM_UTIL_IMG_FMT_NV16 :
+			mimetype = MEDIA_FORMAT_NV16;
+			break;
+		case MM_UTIL_IMG_FMT_YUYV :
+			mimetype = MEDIA_FORMAT_YUYV;
+			break;
+		case MM_UTIL_IMG_FMT_UYVY :
+			mimetype = MEDIA_FORMAT_UYVY;
+			break;
+		case MM_UTIL_IMG_FMT_YUV422 :
+			mimetype = MEDIA_FORMAT_422P;
+			break;
+		case MM_UTIL_IMG_FMT_I420 :
+			mimetype = MEDIA_FORMAT_I420;
+			break;
+		case MM_UTIL_IMG_FMT_YUV420 :
+			mimetype = MEDIA_FORMAT_YV12;
+			break;
+		case MM_UTIL_IMG_FMT_RGB565 :
+			mimetype = MEDIA_FORMAT_RGB565;
+			break;
+		case MM_UTIL_IMG_FMT_RGB888 :
+			mimetype = MEDIA_FORMAT_RGB888;
+			break;
+		case MM_UTIL_IMG_FMT_RGBA8888 :
+			mimetype = MEDIA_FORMAT_RGBA;
+			break;
+		case MM_UTIL_IMG_FMT_ARGB8888 :
+			mimetype = MEDIA_FORMAT_ARGB;
+			break;
+		case MM_UTIL_IMG_FMT_BGRA8888 :
+		case MM_UTIL_IMG_FMT_BGRX8888 :
+		case MM_UTIL_IMG_FMT_NV61 :
+		case MM_UTIL_IMG_FMT_NUM :
+			mimetype = -1;
+			debug_error("Not Supported Format");
+			break;
+		case MM_UTIL_IMG_FMT_NV12_TILED :
+			mimetype = MEDIA_FORMAT_NV12T;
+			break;
+	}
+
+	debug_log("imgp fmt: %d mimetype fmt: %d", format, mimetype);
+	return mimetype;
+}
+
+mm_util_img_format
+_mm_util_mapping_mime_format_to_imgp(media_format_mimetype_e mimetype)
+{
+	mm_util_img_format format = -1;
+
+	switch(mimetype) {
+		case MEDIA_FORMAT_NV12 :
+			format = MM_UTIL_IMG_FMT_NV12;
+			break;
+		case MEDIA_FORMAT_NV16 :
+			format = MM_UTIL_IMG_FMT_NV16;
+			break;
+		case MEDIA_FORMAT_YUYV :
+			format = MM_UTIL_IMG_FMT_YUYV;
+			break;
+		case MEDIA_FORMAT_UYVY :
+			format = MM_UTIL_IMG_FMT_UYVY;
+			break;
+		case MEDIA_FORMAT_422P :
+			format = MM_UTIL_IMG_FMT_YUV422;
+			break;
+		case MEDIA_FORMAT_I420 :
+			format = MM_UTIL_IMG_FMT_I420;
+			break;
+		case MEDIA_FORMAT_YV12 :
+			format = MM_UTIL_IMG_FMT_YUV420;
+			break;
+		case MEDIA_FORMAT_RGB565 :
+			format = MM_UTIL_IMG_FMT_RGB565;
+			break;
+		case MEDIA_FORMAT_RGB888 :
+			format = MM_UTIL_IMG_FMT_RGB888;
+			break;
+		case MEDIA_FORMAT_RGBA :
+			format = MM_UTIL_IMG_FMT_RGBA8888;
+			break;
+		case MEDIA_FORMAT_ARGB :
+			format = MM_UTIL_IMG_FMT_ARGB8888;
+			break;
+		case MEDIA_FORMAT_NV21 :
+		case MEDIA_FORMAT_H261 :
+		case MEDIA_FORMAT_H263 :
+		case MEDIA_FORMAT_H263P :
+		case MEDIA_FORMAT_H264_SP :
+		case MEDIA_FORMAT_H264_MP :
+		case MEDIA_FORMAT_H264_HP :
+		case MEDIA_FORMAT_MJPEG :
+		case MEDIA_FORMAT_MPEG1 :
+		case MEDIA_FORMAT_MPEG2_SP :
+		case MEDIA_FORMAT_MPEG2_MP :
+		case MEDIA_FORMAT_MPEG2_HP :
+		case MEDIA_FORMAT_MPEG4_SP :
+		case MEDIA_FORMAT_MPEG4_ASP :
+		case MEDIA_FORMAT_L16:
+		case MEDIA_FORMAT_PCM :
+		case MEDIA_FORMAT_PCMA :
+		case MEDIA_FORMAT_ALAW :
+		case MEDIA_FORMAT_PCMU :
+		case MEDIA_FORMAT_ULAW :
+		case MEDIA_FORMAT_AMR :
+		case MEDIA_FORMAT_G729 :
+		case MEDIA_FORMAT_AAC:
+		case MEDIA_FORMAT_MP3:
+		case MEDIA_FORMAT_MAX :
+			format = -1;
+			debug_error("Not Supported Format");
+			break;
+		case MEDIA_FORMAT_NV12T :
+			format = MM_UTIL_IMG_FMT_NV12_TILED;
+			break;
+	}
+	debug_log("mimetype: %d imgp fmt: %d", mimetype, format);
+	return format;
+}
+
+bool
+_mm_transform_completed_cb(media_packet_h *dst, int error, void *user_param)
+{
+	if (!user_param) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	mm_util_s * handle = (mm_util_s *)user_param;
+	if(error == MM_ERROR_NONE) {
+		handle->is_completed = TRUE;
+		debug_log("completed");
+	} else {
+		debug_error("[ERROR] complete cb");
+	}
+
+	return TRUE;
+}
+
+int _mm_util_processing(mm_util_s *handle)
+{
+	int ret = MM_ERROR_NONE;
+
+	if(handle == NULL) {
+		debug_error ("Invalid arguments [tag null]\n");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	if(handle->src_packet == NULL) {
+		debug_error ("[src] media_packet_h");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	if(handle->dst_packet == NULL) {
+		debug_error ("[dst] media_packet_h");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	if(handle->src_buf_size) {
+		handle->src = NULL;
+		if(media_packet_get_buffer_data_ptr(handle->src_packet, &handle->src) != MM_ERROR_NONE) {
+			debug_error ("[src] media_packet_get_extra");
+			IMGP_FREE(handle->src);
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+		debug_log("src buffer pointer: %p", handle->src);
+	}
+
+	if(handle->dst_buf_size) {
+		handle->dst = NULL;
+		if(media_packet_get_buffer_data_ptr(handle->dst_packet, &handle->dst) != MM_ERROR_NONE) {
+			IMGP_FREE(handle->src);
+			IMGP_FREE(handle->dst);
+			debug_error ("[dst] media_packet_get_extra");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+	}
+
+	debug_log("src: %p, dst: %p", handle->src, handle->dst);
+
+	if(handle->src_format == handle->dst_format) {
+		if((handle->src_width == handle->dst_width) && (handle->src_height == handle->dst_height)) {
+			if(handle->dst_rotation !=MM_UTIL_ROTATION_NONE) {
+				ret = mm_util_rotate_image(handle->src, handle->src_width, handle->src_height,handle->src_format, handle->dst, &handle->dst_width, &handle->dst_height, handle->dst_rotation);
+				if (ret != MM_ERROR_NONE) {
+					IMGP_FREE(handle->src);
+					IMGP_FREE(handle->dst);
+					debug_error("mm_util_rotate_image failed");
+					return MM_ERROR_IMAGE_INTERNAL;
+				}
+			} else {
+				IMGP_FREE(handle->src);
+				IMGP_FREE(handle->dst);
+				debug_error("[Error] rotate info");
+				return MM_ERROR_IMAGE_INVALID_VALUE;
+			}
+		} else {
+			ret = mm_util_resize_image(handle->src, handle->src_width, handle->src_height,handle->src_format, handle->dst, &handle->dst_width, &handle->dst_height);
+			if (ret != MM_ERROR_NONE) {
+				debug_error("mm_util_resize_image failed");
+				return MM_ERROR_IMAGE_INTERNAL;
+			}
+		}
+	} else if(handle->src_format != handle->dst_format){
+		if((handle->src_width == handle->dst_width) && (handle->src_height == handle->dst_height)) {
+			if(handle->start_x == -1 && handle->start_y == -1) {
+				ret = mm_util_convert_colorspace(handle->src, handle->src_width, handle->src_height,handle->src_format, handle->dst, handle->dst_format);
+				if (ret != MM_ERROR_NONE) {
+					IMGP_FREE(handle->src);
+					IMGP_FREE(handle->dst);
+					debug_error("mm_util_convert_colorspace failed");
+					return MM_ERROR_IMAGE_INTERNAL;
+				}
+			} else {
+				ret = mm_util_crop_image(handle->src, handle->src_width, handle->src_height, handle->src_format,
+				handle->start_x, handle->start_y, &handle->dst_width, &handle->dst_height, handle->dst);
+				if (ret != MM_ERROR_NONE) {
+					IMGP_FREE(handle->src);
+					IMGP_FREE(handle->dst);
+					debug_error("mm_util_convert_colorspace failed");
+					return MM_ERROR_IMAGE_INTERNAL;
+				}
+			}
+		} else {
+			IMGP_FREE(handle->src);
+			IMGP_FREE(handle->dst);
+			debug_error("[Error] Not supported");
+			return MM_ERROR_IMAGE_NOT_SUPPORT_FORMAT;
+		}
+	}
+
+	debug_log("End processing");
+	return ret;
+}
+
+static int
+_mm_util_handle_finalize(mm_util_s *handle)
+{
+	int ret = MM_ERROR_NONE;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	return ret;
+}
+
+int
+mm_util_create(MMHandleType* MMHandle)
+{
+	int ret = MM_ERROR_NONE;
+
+	if(MMHandle == NULL) {
+		debug_error ("Invalid arguments [tag null]\n");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	mm_util_s *_handle = calloc(1,sizeof(mm_util_s));
+	if (!_handle) {
+		debug_error("[ERROR] - _handle");
+		ret = MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	ret = _mm_util_handle_init (_handle);
+	if(ret != MM_ERROR_NONE) {
+		debug_error("_mm_util_handle_init failed");
+		IMGP_FREE(_handle);
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	*MMHandle = (MMHandleType)_handle;
+
+	return ret;
+}
+
+int
+mm_util_set_hardware_acceleration(MMHandleType MMHandle, bool mode)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	handle->hardware_acceleration = mode;
+
+	return ret;
+}
+
+int
+mm_util_set_colorspace_convert(MMHandleType MMHandle, mm_util_img_format colorspace)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	handle->dst_format = colorspace;
+	handle->dst_format_mime = _mm_util_mapping_imgp_format_to_mime(colorspace);
+	debug_log("imgp fmt: %d mimetype: %d", handle->dst_format, handle->dst_format_mime);
+
+	return ret;
+}
+
+int
+mm_util_set_resolution(MMHandleType MMHandle, unsigned int width, unsigned int height)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	handle->dst_width = width;
+	handle->dst_height = height;
+
+	return ret;
+}
+
+int
+mm_util_set_rotation(MMHandleType MMHandle, mm_util_img_rotate_type rotation)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	if(rotation == MM_UTIL_ROTATE_0 || rotation == MM_UTIL_ROTATE_180 || rotation == MM_UTIL_ROTATE_FLIP_HORZ || rotation == MM_UTIL_ROTATE_FLIP_VERT) {
+		handle->dst_width = handle->src_width;
+		handle->dst_height = handle->src_height;
+	} else if(rotation == MM_UTIL_ROTATE_90 || rotation == MM_UTIL_ROTATE_270) {
+		handle->dst_width = handle->src_height;
+		handle->dst_height = handle->src_width;
+	}
+
+	handle->dst_rotation = rotation;
+
+	return ret;
+}
+
+int
+mm_util_set_crop_area(MMHandleType MMHandle, unsigned int start_x, unsigned int start_y, unsigned int end_x, unsigned int end_y)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+
+	unsigned int dest_width = end_x -start_x;
+	unsigned int dest_height = end_y - start_y;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	handle->start_x = start_x;
+	handle->start_y = start_y;
+	handle->dst_width = dest_width;
+	handle->dst_height = dest_height;
+
+	return ret;
+}
+
+int
+mm_util_transform(MMHandleType MMHandle, media_packet_h src_packet, mm_util_completed_callback completed_callback, void * user_data)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+	media_format_h src_fmt;
+	media_format_h dst_fmt;
+	media_format_mimetype_e src_mimetype;
+	int src_width, src_height, src_avg_bps, src_max_bps;
+	uint64_t size = 0;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INTERNAL;
+	}
+
+	if(!src_packet) {
+		debug_error("[ERROR] - src_packet");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	} else {
+		debug_log("src: %p", src_packet);
+	}
+
+	if(!completed_callback) {
+		debug_error("[ERROR] - completed_callback");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	handle->_util_cb = (mm_util_cb_s *)malloc(sizeof(mm_util_cb_s));
+	if(handle->_util_cb) {
+		handle->_util_cb->completed_cb= completed_callback;
+		handle->_util_cb->user_data = user_data;
+	} else {
+		debug_error("[ERROR] _util_cb_s");
+	}
+
+	if(media_packet_get_format(src_packet, &src_fmt) != MM_ERROR_NONE) {
+		debug_error("Imedia_packet_get_format)");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	if(media_format_get_video_info(src_fmt, &src_mimetype, &src_width, &src_height, &src_avg_bps, &src_max_bps) == MEDIA_FORMAT_ERROR_NONE) {
+		debug_log("[Fotmat: %d] W x H : %d x %d", src_mimetype, src_width, src_height);
+	}
+
+	if(_mm_util_check_resolution(src_width, src_height)) {
+		/* src */
+		handle->src_packet = src_packet;
+		debug_log("src_packet: %p handle->src_packet: %p 0x%2x [W X H] %d X %d", src_packet, handle->src_packet, src_fmt, src_width, src_height);
+		if(handle->src_packet) {
+			handle->src_format = _mm_util_mapping_mime_format_to_imgp(src_mimetype);
+			handle->src_width = src_width;
+			handle->src_height = src_height;
+		} else {
+			debug_error("[Error] handle->src");
+			return MM_ERROR_IMAGEHANDLE_NOT_INITIALIZED;
+		}
+
+		if(media_packet_get_buffer_size(handle->src_packet, &size) == MM_ERROR_NONE) {
+			handle->src_buf_size = (guint)size;
+			debug_log("src buffer(%p) %d size: %d", handle->src_packet, handle->src_packet, handle->src_buf_size);
+		} else {
+			debug_error("Error buffer size");
+		}
+
+		if(handle->dst_format == -1) {
+			handle->dst_format = handle->src_format;
+			handle->dst_format_mime = src_mimetype;
+		}
+
+		debug_log("src: %p handle->src_packet: %p (%d),(%d X %d)", src_packet, handle->src_packet, handle->src_packet, handle->src_width, handle->src_height);
+		if(handle->dst_width ==0 && handle->dst_height ==0) {
+			switch(handle->dst_rotation) {
+				case  MM_UTIL_ROTATION_90:
+				case MM_UTIL_ROTATION_270:
+					handle->dst_width  = handle->src_height;
+					handle->dst_height = handle->src_width;
+					break;
+				case MM_UTIL_ROTATION_NONE:
+				case MM_UTIL_ROTATION_180:
+				case MM_UTIL_ROTATION_FLIP_HORZ:
+				case MM_UTIL_ROTATION_FLIP_VERT:
+					handle->dst_width  = handle->src_width;
+					handle->dst_height = handle->src_height;
+					break;
+			}
+		}
+		debug_log("dst (%d X %d)", handle->dst_width, handle->dst_height);
+		if(media_format_make_writable(src_fmt, &dst_fmt) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(src_fmt);
+			debug_error("[Error] Writable - dst format");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_mime(dst_fmt, handle->dst_format_mime) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(src_fmt);
+			media_format_unref(dst_fmt);
+			debug_error("[Error] Set - video mime");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_width(dst_fmt, handle->dst_width) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(src_fmt);
+			media_format_unref(dst_fmt);
+			debug_error("[Error] Set - video width");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_height(dst_fmt, handle->dst_height) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(src_fmt);
+			media_format_unref(dst_fmt);
+			debug_error("[Error] Set - video height");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_avg_bps(dst_fmt, src_avg_bps) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(src_fmt);
+			media_format_unref(dst_fmt);
+			debug_error("[Error] Set - video avg bps");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_max_bps(dst_fmt, src_max_bps) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(src_fmt);
+			media_format_unref(dst_fmt);
+			debug_error("[Error] Set - video max bps");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+		if(media_packet_create_alloc(dst_fmt, (media_packet_finalize_cb)_mm_transform_completed_cb, NULL, &handle->dst_packet) != MM_ERROR_NONE) {
+			debug_error("Imedia_packet_get_format)");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		} else {
+			debug_log("Success - dst media packet");
+			if(media_packet_get_buffer_size(handle->dst_packet, &size) != MM_ERROR_NONE) {
+				debug_error("Imedia_packet_get_format)");
+				return MM_ERROR_IMAGE_INVALID_VALUE;
+			}
+			handle->dst_buf_size = (guint)size;
+			debug_log("handle->src_packet: %p [%d] %d X %d (%d) => handle->dst_packet: %p [%d] %d X %d (%d)",
+				handle->src_packet, handle->src_format, handle->src_width, handle->src_height, handle->src_buf_size,
+				handle->dst_packet, handle->dst_format,handle->dst_width, handle->dst_height, handle->dst_buf_size);
+		}
+	}else {
+		debug_error("%d %d", src_width, src_height);
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	ret = _mm_util_processing(handle);
+
+	if(ret == MM_ERROR_NONE) {
+		if(handle->_util_cb->completed_cb) {
+			debug_log("completed_cb");
+			handle->_util_cb->completed_cb(&handle->dst_packet, MM_ERROR_NONE, handle->_util_cb->user_data);
+			debug_log("completed_cb %p", &handle->dst);
+		}
+		debug_log("Success - Transform");
+	} else {
+		debug_error("Error - Transform");
+	}
+	media_format_unref(src_fmt);
+	media_format_unref(dst_fmt);
+
+	return ret;
+}
+
+int
+mm_transform_is_completed(MMHandleType MMHandle, bool *is_completed)
+{
+	int ret = MM_ERROR_NONE;
+
+	mm_util_s *handle = (mm_util_s *) MMHandle;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	if (!is_completed) {
+		debug_error("[ERROR] - is_completed");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	*is_completed = handle->is_completed;
+	debug_log("[Transform....] %d", *is_completed);
+
+	return ret;
+}
+
+int
+mm_util_destroy(MMHandleType MMHandle)
+{
+	int ret = MM_ERROR_NONE;
+	mm_util_s *handle = (mm_util_s*) MMHandle;
+
+	if (!handle) {
+		debug_error("[ERROR] - handle");
+		return MM_ERROR_IMAGEHANDLE_NOT_INITIALIZED;
+	}
+
+	/* Close */
+	if(_mm_util_handle_finalize(handle) != MM_ERROR_NONE) {
+		debug_error("_mm_util_handle_finalize)");
+		return MM_ERROR_IMAGE_INVALID_VALUE;
+	}
+
+	IMGP_FREE(handle->_util_cb);
+	IMGP_FREE(handle);
+
+	return ret;
+}
+
 EXPORT_API int
 mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format, unsigned char *dst, mm_util_img_format dst_format)
 {
@@ -570,15 +1209,19 @@ mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned 
 
 	if(_mm_cannot_convert_format(src_format, dst_format)) {
 		debug_error("#ERROR# Cannot Support Image Format Convert");
-		return MM_ERROR_IMAGE_INVALID_VALUE;
+		return MM_ERROR_IMAGE_NOT_SUPPORT_FORMAT;
 	}
 
 	debug_log("[src] 0x%2x (%d x %d) [dst] 0x%2x", src, src_width, src_height, dst);
 
-	imgp_info_s* _imgp_info_s=(imgp_info_s*)malloc(sizeof(imgp_info_s));
+	imgp_info_s* _imgp_info_s=(imgp_info_s*)g_malloc0(sizeof(imgp_info_s));
+	if(_imgp_info_s == NULL) {
+		debug_error("ERROR - alloc handle");
+		return MM_ERROR_IMAGEHANDLE_NOT_INITIALIZED;
+	}
 	IMGPInfoFunc _mm_util_imgp_func = NULL;
 	GModule *_module = NULL;
-	imgp_plugin_type_e _imgp_plugin_type_e=-1;
+	imgp_plugin_type_e _imgp_plugin_type_e = 0;
 
 	/* Initialize */
 	if(_mm_select_convert_plugin(src_format, dst_format)) {
@@ -586,8 +1229,9 @@ mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned 
 	}else {
 		_imgp_plugin_type_e = IMGP_GSTCS;
 	}
+	debug_log("plugin type: %d", _imgp_plugin_type_e);
 	_module = _mm_util_imgp_initialize(_imgp_plugin_type_e);
-
+	debug_log("_mm_util_imgp_init: %p", _module);
 	if(_module == NULL) { /* when IMGP_NEON is NULL */
 		_imgp_plugin_type_e = IMGP_GSTCS;
 		debug_log("You use %s module", PATH_GSTCS_LIB);
@@ -595,8 +1239,9 @@ mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned 
 	}
 	debug_log("mm_util_imgp_func: %p", _module);
 	ret=_mm_set_imgp_info_s(_imgp_info_s, src_format, src_width, src_height, dst_format, src_width, src_height, MM_UTIL_ROTATE_0);
-	if(ret != MM_ERROR_NONE) 	{
+	if(ret != MM_ERROR_NONE) {
 		debug_error("_mm_set_imgp_info_s failed");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 	debug_log("Sucess _mm_set_imgp_info_s");
@@ -610,10 +1255,12 @@ mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned 
 		if (ret != MM_ERROR_NONE)
 		{
 			debug_error("image processing failed");
+			_mm_util_imgp_finalize(_module, _imgp_info_s);
 			return MM_ERROR_IMAGE_INVALID_VALUE;
 		}
 	}else {
 		debug_error("g_module_symbol failed");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
@@ -636,7 +1283,7 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
 {
 	int ret = MM_ERROR_NONE;
 	if(!src || !dst) {
-		debug_error("nvalid argument\n");
+		debug_error("invalid argument\n");
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
@@ -650,17 +1297,21 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
-	if( (src_width < 0) || (src_height < 0)) {
-		debug_error("#ERROR# src_width || src_height value ");
+	if( !src_width || !src_height) {
+		debug_error("#ERROR# src_width || src_height valuei is 0 ");
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
 	debug_log("[src] 0x%2x (%d x %d) [dst] 0x%2x", src, src_width, src_height, dst);
 
-	imgp_info_s* _imgp_info_s=(imgp_info_s*)malloc(sizeof(imgp_info_s));
+	imgp_info_s* _imgp_info_s=(imgp_info_s*)g_malloc0(sizeof(imgp_info_s));
+	if(_imgp_info_s == NULL) {
+		debug_error("ERROR - alloc handle");
+		return MM_ERROR_IMAGEHANDLE_NOT_INITIALIZED;
+	}
 	IMGPInfoFunc _mm_util_imgp_func = NULL;
 	GModule *_module = NULL;
-	imgp_plugin_type_e _imgp_plugin_type_e=-1;
+	imgp_plugin_type_e _imgp_plugin_type_e = 0;
 
 	/* Initialize */
 	if(_mm_select_resize_plugin(src_format)) {
@@ -668,6 +1319,7 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
 	}else {
 		_imgp_plugin_type_e = IMGP_GSTCS;
 	}
+	debug_log("plugin type: %d", _imgp_plugin_type_e);
 	_module = _mm_util_imgp_initialize(_imgp_plugin_type_e);
 	debug_log("_mm_util_imgp_init: %p", _module);
 	if(_module == NULL) /* when IMGP_NEON is NULL */
@@ -681,6 +1333,7 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
 	debug_log("_mm_set_imgp_info_s ret: %d", ret);
 	if(ret != MM_ERROR_NONE) {
 		debug_error("_mm_set_imgp_info_s failed");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 	debug_log("Sucess _mm_set_imgp_info_s");
@@ -702,10 +1355,12 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
 		if (ret != MM_ERROR_NONE)
 		{
 			debug_error("image processing failed");
+			_mm_util_imgp_finalize(_module, _imgp_info_s);
 			return MM_ERROR_IMAGE_INVALID_VALUE;
 		}
 	}else {
 		debug_error("g_module_symbol failed");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
@@ -719,7 +1374,7 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
 
 	/* Finalize */
 	ret = _mm_util_imgp_finalize(_module, _imgp_info_s);
-	if(ret != MM_ERROR_NONE) 	{
+	if(ret != MM_ERROR_NONE) {
 		debug_error("_mm_util_imgp_finalize failed");
 		return MM_ERROR_IMAGE_NOT_SUPPORT_FORMAT;
 	}
@@ -746,8 +1401,8 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
-	if( (src_width < 0) || (src_height < 0)) {
-		debug_error("#ERROR# src_width || src_height value ");
+	if( !src_width || !src_height) {
+		debug_error("#ERROR# src_width || src_height value is 0 ");
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
@@ -759,11 +1414,15 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
 	debug_log("[src] 0x%2x (%d x %d) [dst] 0x%2x", src, src_width, src_height, dst);
 
 	debug_log("#START#");
-	imgp_info_s* _imgp_info_s=(imgp_info_s*)malloc(sizeof(imgp_info_s));
+	imgp_info_s* _imgp_info_s=(imgp_info_s*)g_malloc0(sizeof(imgp_info_s));
+	if(_imgp_info_s == NULL) {
+		debug_error("ERROR - alloc handle");
+		return MM_ERROR_IMAGEHANDLE_NOT_INITIALIZED;
+	}
 	unsigned int dst_size=0;
 	IMGPInfoFunc _mm_util_imgp_func = NULL;
 	GModule *_module = NULL;
-	imgp_plugin_type_e _imgp_plugin_type_e=-1;
+	imgp_plugin_type_e _imgp_plugin_type_e = 0;
 
 	/* Initialize */
 	if( _mm_select_rotate_plugin(src_format, src_width, src_height, angle)) {
@@ -771,6 +1430,7 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
 	}else {
 		_imgp_plugin_type_e = IMGP_GSTCS;
 	}
+	debug_log("plugin type: %d", _imgp_plugin_type_e);
 	_module = _mm_util_imgp_initialize(_imgp_plugin_type_e);
 	debug_log("_mm_util_imgp_func: %p", _module);
 	if(_module == NULL) { /* when IMGP_NEON is NULL */
@@ -782,6 +1442,7 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
 	ret=_mm_confirm_dst_width_height(src_width, src_height, dst_width, dst_height, angle);
 	if(ret != MM_ERROR_NONE) {
 		debug_error("dst_width || dest_height size Error");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_INVALID_VALUE;
 	}
 
@@ -789,6 +1450,7 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
 	debug_log("_mm_set_imgp_info_s");
 	if(ret != MM_ERROR_NONE) {
 		debug_error("_mm_set_imgp_info_s failed");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_NOT_SUPPORT_FORMAT;
 	}
 	debug_log("Sucess _mm_set_imgp_info_s");
@@ -808,10 +1470,12 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
 		ret=_mm_util_imgp_func(_imgp_info_s, src, dst, IMGP_ROT);
 		if (ret!= MM_ERROR_NONE) 	{
 			debug_error("image processing failed");
+			_mm_util_imgp_finalize(_module, _imgp_info_s);
 			return MM_ERROR_IMAGE_NOT_SUPPORT_FORMAT;
 		}
 	}else {
 		debug_error("g_module_symbol failed");
+		_mm_util_imgp_finalize(_module, _imgp_info_s);
 		return MM_ERROR_IMAGE_NOT_SUPPORT_FORMAT;
 	}
 
@@ -934,6 +1598,8 @@ mm_util_get_image_size(mm_util_img_format format, unsigned int width, unsigned i
 		case MM_UTIL_IMG_FMT_YUV422:
 		case MM_UTIL_IMG_FMT_YUYV:
 		case MM_UTIL_IMG_FMT_UYVY:
+		case MM_UTIL_IMG_FMT_NV16:
+		case MM_UTIL_IMG_FMT_NV61:
 			stride = MM_UTIL_ROUND_UP_4 (width * 2);
 			size = stride * height;
 			*imgsize = size;
