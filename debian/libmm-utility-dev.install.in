@@ -1,3 +1,0 @@
-@PREFIX@/include/*
-@PREFIX@/lib/*.a
-@PREFIX@/lib/pkgconfig/*

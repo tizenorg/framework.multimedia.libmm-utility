@@ -18,158 +18,217 @@
  * limitations under the License.
  *
  */
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "mm_util_imgp.h"
 #include "mm_util_imgp_internal.h"
-#include "mm_log.h"
-#include "mm_debug.h"
-#include <mm_ta.h>
-#include <unistd.h>
 #include <mm_error.h>
-#define _CROP_ 0
-#define _ROTATE_ 0
-#define _RESIZE_ 0
-#define _CONVERT_ 1
 #define ONE_ALL 0
+#define IMAGE_FORMAT_LABEL_BUFFER_SIZE 4
+MMHandleType MMHandle = 0;
+
+bool
+transform_completed_cb(media_packet_h *packet, int error, void *user_param)
+{
+	uint64_t size = 0;
+	char output_file[25] = {};
+	debug_log("MMHandle: 0x%2x", MMHandle);
+
+	media_format_h dst_fmt;
+	media_format_mimetype_e dst_mimetype;
+	int dst_width, dst_height, dst_avg_bps, dst_max_bps;
+	char *output_fmt = (char*)malloc(sizeof(char) * IMAGE_FORMAT_LABEL_BUFFER_SIZE);
+	if(output_fmt) {
+		if(media_packet_get_format(*packet, &dst_fmt) != MM_ERROR_NONE) {
+			debug_error("Imedia_packet_get_format");
+			IMGP_FREE(output_fmt);
+			return FALSE;
+		}
+
+		if(media_format_get_video_info(dst_fmt, &dst_mimetype, &dst_width, &dst_height, &dst_avg_bps, &dst_max_bps) ==MEDIA_FORMAT_ERROR_NONE) {
+			memset(output_fmt, 0, IMAGE_FORMAT_LABEL_BUFFER_SIZE);
+			if(dst_mimetype  ==MEDIA_FORMAT_YV12 || dst_mimetype == MEDIA_FORMAT_422P ||dst_mimetype == MEDIA_FORMAT_I420
+				|| dst_mimetype == MEDIA_FORMAT_NV12 || dst_mimetype == MEDIA_FORMAT_UYVY ||dst_mimetype == MEDIA_FORMAT_YUYV) {
+				strncpy(output_fmt, "yuv", strlen("yuv"));
+			} else {
+				strncpy(output_fmt,"rgb", strlen("rgb"));
+			}
+			debug_log("[mimetype: %d] W x H : %d x %d", dst_mimetype, dst_width, dst_height);
+			snprintf(output_file, 25, "result_%dx%d.%s", dst_width,dst_height, output_fmt);
+		}
+	}
+
+	if(error == MM_ERROR_NONE) {
+		debug_log("completed");
+	} else {
+		debug_error("[ERROR] complete cb");
+		GThread * destroy_thread = g_thread_new(NULL, mm_util_destroy, MMHandle);
+		return_val_if_fail(destroy_thread, FALSE);
+		g_thread_unref(destroy_thread);
+	}
+
+	FILE *fpout = fopen(output_file, "w");
+	if(fpout) {
+		media_packet_get_buffer_size(*packet, &size);
+		void *dst = NULL;
+		if(media_packet_get_buffer_data_ptr(*packet, &dst) != MM_ERROR_NONE) {
+			IMGP_FREE(dst);
+			IMGP_FREE(output_fmt);
+			fclose(fpout);
+			debug_error ("[dst] media_packet_get_extra");
+			return FALSE;
+		}
+		debug_log("dst: %p [%d]", dst, size);
+		fwrite(dst, 1, size, fpout);
+		debug_log("FREE");
+		fclose(fpout);
+	}
+
+	debug_log("write result");
+	debug_log("Free (output_fmt)");
+	media_packet_destroy(*packet);
+	IMGP_FREE(output_fmt);
+	return TRUE;
+}
 
 int main(int argc, char *argv[])
 {
-	unsigned char *src = NULL;
-	unsigned char *dst = NULL;
-	unsigned int src_width = 0;
-	unsigned int src_height = 0;
-	unsigned int dst_width = 0;
-	unsigned int dst_height = 0;
-	char output_file[25];
-	unsigned int src_size = 0;
-	unsigned int dst_size = 0;
-	int src_cs;
-	int dst_cs;
 	int ret = 0;
-	int cnt = 0;
-	char fmt[IMAGE_FORMAT_LABEL_BUFFER_SIZE];
-	
-	if (argc < 6) {
-		mmf_debug(MMF_DEBUG_ERROR, "[%s][%05d] Usage: ./mm_image_testsuite filename [yuv420 | yuv420p | yuv422 | uyvy | vyuy | nv12 | nv12t | rgb565 | rgb888 | argb | jpeg] width height\n", __func__, __LINE__);
-		exit (0);
+	mm_util_s *handle = NULL;
+	void *src;
+	void *ptr;
+	media_packet_h src_packet;
+
+	if (argc < 1) {
+		debug_error("[%s][%05d] Usage: ./mm_image_testsuite filename [yuv420 | yuv420p | yuv422 | uyvy | vyuy | nv12 | nv12t | rgb565 | rgb888 | argb | jpeg] width height\n");
+		return ret;
 	}
 
-#if _CROP_
-	src_cs =atoi(argv[4]);
-	dst_cs = src_cs;
-	unsigned int crop_start_x = atoi(argv[5]);
-	unsigned int crop_start_y = atoi(argv[6]);
-	dst_width = atoi(argv[7]);
-	dst_height = atoi(argv[8]);
-#else
-	src_cs =atoi(argv[6]);
 
-	#if _CONVERT_
-	dst_cs = atoi(argv[7]);
-	#else
-	dst_cs = src_cs;
-	#endif
+	/* Create Transform */
+	ret = mm_util_create (&MMHandle);
+	if(ret == MM_ERROR_NONE) {
+		debug_log("Success - Create Transcode Handle [MMHandle: 0x%2x]", MMHandle);
+	} else {
+		debug_log("ERROR - Create Transcode Handle");
+		return ret;
+	}
 
-	#if _ROTATE_
-	mm_util_img_rotate_type angle = atoi(argv[8]);
-	#endif
+	handle = (mm_util_s*) MMHandle;
 
-	MMTA_INIT();
-	#if ONE_ALL
-	while(cnt++ < 10000) {
-	#endif
-
-	dst_width = atoi(argv[4]);
-	dst_height = atoi(argv[5]);
-#endif
-	src_width = atoi(argv[2]);
-	src_height = atoi(argv[3]);
-
-	FILE *fp = fopen(argv[1], "r");
-	ret = mm_util_get_image_size(src_cs, src_width, src_height, &src_size);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] convert src buffer size=%d\n", __func__, __LINE__, src_size);
-	src = malloc(src_size);
-	fread(src, 1, src_size, fp);
-
-	ret = mm_util_get_image_size(dst_cs, dst_width, dst_height, &dst_size);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] dst_cs: %d dst_width: %d dst_height: %d dst buffer size=%d\n", __func__, __LINE__, dst_cs, dst_width, dst_height, dst_size);
-	dst = malloc(dst_size);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] dst: %p", __func__, __LINE__, dst);
-
-	#if _CROP_
-	__ta__("mm_util_crop_image",
-	ret = mm_util_crop_image(src, src_width, src_height, src_cs, crop_start_x, crop_start_y, &dst_width, &dst_height, dst);
-	);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] mm_util_crop_image dst: %p ret = %d\n", __func__, __LINE__, dst, ret);
-	#endif
-
-	#if _ROTATE_
-	__ta__("mm_util_rotate_image",
-	ret = mm_util_rotate_image(src, src_width, src_height, src_cs, dst, &dst_width, &dst_height, angle);
-	);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] mm_util_rotate_image dst: %p ret = %d\n", __func__, __LINE__, dst, ret);
-	#endif
-
-	#if _RESIZE_
-	__ta__("mm_util_resize_image",
-	ret = mm_util_resize_image(src, src_width, src_height, src_cs, dst, &dst_width, &dst_height);
-	);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] mm_util_resize_image dst: %p ret = %d", __func__, __LINE__, dst, ret);
-	#endif
-
-	#if _CONVERT_
-	__ta__("mm_util_convert_colorspace",
-	ret = mm_util_convert_colorspace(src, src_width, src_height, src_cs, dst, dst_cs);
-	);
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] mm_util_convert_colorspace dst:%p ret = %d",__func__, __LINE__, dst, ret);
-	MMTA_ACUM_ITEM_END("colorspace", 0);
-	MMTA_ACUM_ITEM_SHOW_RESULT();
-	MMTA_RELEASE ();
-	#endif
-	FILE *fpout;
-
-	if(ret==MM_ERROR_NONE) {
-		if(cnt == 0) {
-			if(dst_cs ==MM_UTIL_IMG_FMT_YUV420 || dst_cs == MM_UTIL_IMG_FMT_YUV422 ||dst_cs == MM_UTIL_IMG_FMT_I420
-				|| dst_cs == MM_UTIL_IMG_FMT_NV12 || dst_cs == MM_UTIL_IMG_FMT_UYVY ||dst_cs == MM_UTIL_IMG_FMT_YUYV) {
-				strncpy(fmt, "yuv", IMAGE_FORMAT_LABEL_BUFFER_SIZE);
-			} else {
-				strncpy(fmt,"rgb", IMAGE_FORMAT_LABEL_BUFFER_SIZE);
-			}
-			sprintf(output_file, "result%d_%dx%d.%s", cnt, dst_width, dst_height, fmt);
-			fpout = fopen(output_file, "w");
-			mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] %s = %dx%d dst_size: %d", __func__, __LINE__, output_file, dst_width, dst_height, dst_size);
-			mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] dst:%p ret = %d",__func__, __LINE__, dst, ret);
-			fwrite(dst, 1, dst_size, fpout);
-			fflush(fpout);
+	media_format_h fmt;
+	if(media_format_create(&fmt) == MEDIA_FORMAT_ERROR_NONE) {
+		if(media_format_set_video_mime(fmt, MEDIA_FORMAT_I420) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(fmt);
+			debug_error("[Error] Set - video mime");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
 		}
-		if(fp) {
-		fclose(fp);
-		mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] fclose(fp) fp: 0x%2x",__func__, __LINE__, fp);
+
+		if(media_format_set_video_width(fmt, 320) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(fmt);
+			debug_error("[Error] Set - video width");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_height(fmt, 240) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(fmt);
+			debug_error("[Error] Set - video height");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_avg_bps(fmt, 15000000) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(fmt);
+			debug_error("[Error] Set - video avg bps");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		if(media_format_set_video_max_bps(fmt, 20000000) != MEDIA_FORMAT_ERROR_NONE) {
+			media_format_unref(fmt);
+			debug_error("[Error] Set - video max bps");
+			return MM_ERROR_IMAGE_INVALID_VALUE;
+		}
+
+		debug_log("media_format_set_video_info success! w:320, h:240, MEDIA_FORMAT_I420\n");
+	}
+	else {
+		debug_error("media_format_create failed...");
 	}
 
-	if(fpout) {
-		fclose(fpout);
-		mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] fclose(fp) fpout: 0x%2x",__func__, __LINE__, fpout);
+	ret = media_packet_create_alloc(fmt, (media_packet_finalize_cb)transform_completed_cb, NULL, &src_packet);
+	if(ret == MM_ERROR_NONE) {
+		debug_log("Success - Create Media Packet(%p)", src_packet);
+		uint64_t size =0;
+		if (media_packet_get_buffer_size(src_packet, &size) == MEDIA_PACKET_ERROR_NONE) {
+			ptr = malloc(size);
+			if (ptr == NULL) {
+				debug_log("\tmemory allocation failed\n");
+				return FALSE;
+			}
+			if (media_packet_get_buffer_data_ptr(src_packet, &ptr) == MEDIA_PACKET_ERROR_NONE) {
+				FILE *fp = fopen(argv[1], "r");
+				if (fp == NULL) {
+					fprintf(stderr, "\tfile open failed %d\n", errno);
+					return FALSE;
+				}
+				src = malloc(size);
+				if (src == NULL) {
+					debug_log("\tmemory allocation failed\n");
+					return FALSE;
+				}
+				if(fread(src, 1, (int)size, fp)) {
+					debug_log("#Success# fread");
+					memcpy(ptr, src, (int)size);
+					debug_log("memcpy");
+				} else {
+					debug_error("#Error# fread");
+				}
+			}
+		}
+	} else {
+		debug_log("ERROR - Create Media Packet");
+		return ret;
 	}
-	
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] src: %p",__func__, __LINE__, src);
-	if(src) {
-		free(src); src = NULL;
-	}
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] dst: %p",__func__, __LINE__,dst);
-	if(dst) {
-		free(dst); dst = NULL;
-	}
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] Success -  free src & dst",__func__, __LINE__);
 
-	#if ONE_ALL
-	mmf_debug(MMF_DEBUG_LOG, "[%s][%05d] cnt: %d",__func__, __LINE__, cnt);
+	/* Set Source */
+	ret = mm_util_set_hardware_acceleration(MMHandle, atoi(argv[2]));
+	if(ret == MM_ERROR_NONE) {
+		debug_log("Success - Set hardware_acceleration");
+	} else {
+		debug_log("ERROR - Set hardware_acceleration");
+		return ret;
 	}
-	#endif
+
+	ret = mm_util_set_colorspace_convert(MMHandle, MM_UTIL_IMG_FMT_RGB888);
+	if(ret == MM_ERROR_NONE) {
+		debug_log("Success - Set Convert Info");
+	} else {
+		media_format_unref(fmt);
+		debug_log("ERROR - Set Convert Info");
+		return ret;
 	}
+
+	ret = mm_util_set_resolution(MMHandle, 320, 240);
+	if(ret == MM_ERROR_NONE) {
+		debug_log("Success - Set Resize Info");
+	} else {
+		media_format_unref(fmt);
+		debug_log("ERROR - Set Resize Info");
+		return ret;
+	}
+
+	/* Transform */
+	ret = mm_util_transform(MMHandle, src_packet, (mm_util_completed_callback) transform_completed_cb, handle);
+	if(ret == MM_ERROR_NONE) {
+		debug_log("Success - Transform");
+	} else {
+		media_format_unref(fmt);
+		debug_error("ERROR - Transform");
+		return ret;
+	}
+
+	debug_log("Wait...");
+
+	media_packet_destroy(src_packet);
+	media_format_unref(fmt);
+	debug_log("destroy");
 
 	return ret;
 }

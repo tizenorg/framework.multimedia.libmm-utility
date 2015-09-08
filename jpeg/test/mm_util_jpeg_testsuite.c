@@ -27,14 +27,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <mm_util_jpeg.h>
-#include <mm_ta.h>
 #include <mm_error.h>
-#define ENCODE_RESULT_PATH "/opt/media/encode_test.jpg"
-#define DECODE_RESULT_PATH "/opt/media/decode_test.yuv"
+#include <mm_debug.h>
+#define ENCODE_RESULT_PATH "/opt/usr/media/encode_test.jpg"
+#define DECODE_RESULT_PATH "/opt/usr/media/decode_test."
 #define TRUE  1
 #define FALSE 0
-#define GST_EXT_TIME_ANALYSIS
-
+#define BUFFER_SIZE 128
 static inline void flush_stdin()
 {
 	int ch;
@@ -45,7 +44,7 @@ static inline void flush_stdin()
 static int _read_file(char *file_name, void **data, int *data_size)
 {
 	FILE *fp = NULL;
-	int file_size = 0;
+	long file_size = 0;
 
 	if (!file_name || !data || !data_size) {
 		fprintf(stderr, "\tNULL pointer\n");
@@ -62,22 +61,38 @@ static int _read_file(char *file_name, void **data, int *data_size)
 
 	fseek(fp, 0, SEEK_END);
 	file_size = ftell(fp);
-	rewind(fp);
-	*data = (void *)malloc(file_size);
-	if (*data == NULL) {
-		fprintf(stderr, "\tmalloc failed %d\n", errno);
-	} else {
-		fread(*data, 1, file_size, fp);
-	}
+	if(file_size > -1L) {
+		rewind(fp);
+		*data = (void *)malloc(file_size);
+		if (*data == NULL) {
+			fprintf(stderr, "\tmalloc failed %d\n", errno);
+			fclose(fp);
+			fp = NULL;
+			return FALSE;
+		} else {
+			if(fread(*data, 1, file_size, fp)) {
+				debug_log("#Success# fread");
+			} else {
+				debug_error("#Error# fread");
+				fclose(fp);
+				fp = NULL;
+				return FALSE;
+			}
+		}
+		fclose(fp);
+		fp = NULL;
 
-	fclose(fp);
-	fp = NULL;
-
-	if (*data) {
-		*data_size = file_size;
-		return TRUE;
+		if (*data) {
+			*data_size = file_size;
+			return TRUE;
+		} else {
+			*data_size = 0;
+			return FALSE;
+		}
 	} else {
-		*data_size = 0;
+		debug_error("#Error# ftell");
+		fclose(fp);
+		fp = NULL;
 		return FALSE;
 	}
 }
@@ -95,6 +110,11 @@ static int _write_file(char *file_name, void *data, int data_size)
 	fprintf(stderr, "\tTry to open %s to write\n", file_name);
 
 	fp = fopen(file_name, "w");
+	if (fp == NULL) {
+		fprintf(stderr, "\tfile open failed %d\n", errno);
+		return FALSE;
+	}
+
 	fwrite(data, 1, data_size, fp);
 	fclose(fp);
 	fp = NULL;
@@ -117,7 +137,7 @@ int main(int argc, char *argv[])
 	void *dst = NULL;
 
 	mm_util_jpeg_yuv_data decoded_data = {0,};
-	mm_util_jpeg_yuv_format fmt = MM_UTIL_JPEG_FMT_YUV420;
+	mm_util_jpeg_yuv_format fmt; /* = MM_UTIL_JPEG_FMT_RGB888; */
 
 	if (argc < 2) {
 		fprintf(stderr, "\t[usage]\n");
@@ -126,27 +146,24 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	//g_type_init();  //when you include WINK
+	/*g_type_init();  //when you include WINK */
 
-	MMTA_INIT();
 
 	if (!strcmp("encode", argv[1])) {
 		if (_read_file(argv[2], &src, &src_size)) {
 			width = atoi(argv[3]);
 			height = atoi(argv[4]);
 			quality = atoi(argv[5]);
+			fmt = atoi(argv[6]);
 
-			__ta__("mm_util_jpeg_encode_to_memory",
 			ret = mm_util_jpeg_encode_to_memory(&dst, &dst_size, src, width, height, fmt, quality);
-			);
 		} else {
 			ret = MM_ERROR_IMAGE_INTERNAL;
 		}
 	} else if (!strcmp("decode", argv[1])) {
 		if (_read_file(argv[2], &src, &src_size)) {
-			__ta__("mm_util_decode_from_jpeg_memory",
+			fmt = atoi(argv[3]);
 			ret = mm_util_decode_from_jpeg_memory(&decoded_data, src, src_size, fmt);
-			);
 
 			free(src);
 			src = NULL;
@@ -178,8 +195,18 @@ int main(int argc, char *argv[])
 			if(decoded_data.data) {
 				fprintf(stderr, "\t##Decoded data##: %p\t width: %d\t height:%d\t size: %d\n",
 				                decoded_data.data, decoded_data.width, decoded_data.height, decoded_data.size);
-
-				_write_file(DECODE_RESULT_PATH, decoded_data.data, decoded_data.size);
+				char filename[BUFFER_SIZE];
+				memset(filename, 0, BUFFER_SIZE);
+				if(fmt == MM_UTIL_JPEG_FMT_RGB888 || fmt == MM_UTIL_JPEG_FMT_RGBA8888 || fmt == MM_UTIL_JPEG_FMT_BGRA8888 || fmt == MM_UTIL_JPEG_FMT_ARGB8888) {
+					snprintf(filename, BUFFER_SIZE, "%s%s", DECODE_RESULT_PATH, "rgb");
+				} else if((fmt == MM_UTIL_JPEG_FMT_YUV420) ||
+					(fmt == MM_UTIL_JPEG_FMT_NV12) ||
+					(fmt == MM_UTIL_JPEG_FMT_NV21) ||
+					(fmt == MM_UTIL_JPEG_FMT_NV16) ||
+					(fmt == MM_UTIL_JPEG_FMT_NV61)) {
+					snprintf(filename, BUFFER_SIZE, "%s%s", DECODE_RESULT_PATH, "yuv");
+				}
+				_write_file(filename, decoded_data.data, decoded_data.size);
 
 				free(decoded_data.data);
 				decoded_data.data = NULL;
@@ -190,8 +217,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	MMTA_ACUM_ITEM_SHOW_RESULT();
-	MMTA_RELEASE ();
 
 	return 0;
 }
