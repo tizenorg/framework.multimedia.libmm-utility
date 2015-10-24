@@ -8,6 +8,8 @@ AC_CONFIG_HEADER([config.h])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # Checks for programs.
+m4_pattern_allow([AM_PROG_AR])
+AM_PROG_AR
 AC_PROG_CC
 AC_PROG_LIBTOOL
 
@@ -57,6 +59,9 @@ AC_SUBST(TBM_LIBS)
 PKG_CHECK_MODULES(SYSTEMINFO, capi-system-info)
 AC_SUBST(SYSTEMINFO_CFLAGS)
 AC_SUBST(SYSTEMINFO_LIBS)
+
+PKG_CHECK_MODULES(TTRACE, [ttrace], AC_DEFINE(ENABLE_TTRACE, 1, [ttrace available]))
+AC_SUBST(TTRACE)
 
 AC_CONFIG_FILES([Makefile
 		 imgp/Makefile

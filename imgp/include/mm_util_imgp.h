@@ -201,7 +201,7 @@ mm_util_set_crop_area(MMHandleType MMHandle, unsigned int start_x, unsigned int 
  */
 
 int
-mm_transform_is_completed(MMHandleType MMHandle, bool *is_completed);
+mm_util_transform_is_completed(MMHandleType MMHandle, bool *is_completed);
 
 /**
  *
@@ -211,7 +211,7 @@ mm_transform_is_completed(MMHandleType MMHandle, bool *is_completed);
  * @param	completed_callback					[in]			Completed_callback
  * @param	user_param						[in]			User parameter which is received from user when callback function was set
 
- * @return 	This function returns transcode processor result value
+ * @return 	This function returns transform processor result value
  *		if the result is 0, then you can use output_Filename pointer(char** value)
  *		else if the result is -1, then do not execute when the colopsapce converter is not supported
  */
@@ -249,7 +249,7 @@ mm_util_destroy(MMHandleType MMHandle);
  * @since       R1, 1.0
  */
 int
-mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+mm_util_convert_colorspace(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
                            unsigned char *dst, mm_util_img_format dst_format);
 
 
@@ -270,7 +270,7 @@ mm_util_convert_colorspace(unsigned char *src, unsigned int src_width, unsigned 
  * @since       R1, 1.0
  */
 int
-mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+mm_util_resize_image(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
                      unsigned char *dst, unsigned int *dst_width, unsigned int *dst_height);
 
 
@@ -292,7 +292,7 @@ mm_util_resize_image(unsigned char *src, unsigned int src_width, unsigned int sr
  * @since       R1, 1.0
  */
 int
-mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+mm_util_rotate_image(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
                      unsigned char *dst, unsigned int *dst_width, unsigned int *dst_height, mm_util_img_rotate_type angle);
 
 /**
@@ -315,7 +315,7 @@ mm_util_rotate_image(unsigned char *src, unsigned int src_width, unsigned int sr
  * @since       R1, 1.0
  */
 int
-mm_util_crop_image(unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
+mm_util_crop_image(const unsigned char *src, unsigned int src_width, unsigned int src_height, mm_util_img_format src_format,
                      unsigned int crop_start_x, unsigned int crop_start_y, unsigned int *crop_dest_width, unsigned int *crop_dest_height, unsigned char *dst);
 
 #ifdef __cplusplus

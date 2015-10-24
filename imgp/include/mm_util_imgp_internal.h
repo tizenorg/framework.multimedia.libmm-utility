@@ -47,7 +47,7 @@
 #define PATH_GSTCS_LIB					"/usr/lib/libmmutil_imgp_gstcs.so"
 
 #define IMGP_FUNC_NAME  				"mm_imgp"
-#define IMGP_FREE(src) { if(src) {g_free(src); src = NULL;} }
+#define IMGP_FREE(src) { if(src != NULL) {g_free(src); src = NULL;} }
 #define SCMN_IMGB_MAX_PLANE         (4)
 #define MAX_SRC_BUF_NUM          12	/* Max number of upstream src plugins's buffer */
 #define MAX_DST_BUF_NUM          12
@@ -91,6 +91,7 @@ typedef struct _imgp_info_s
 	unsigned int dst_height;
 	unsigned int output_stride;
 	unsigned int output_elevation;
+	unsigned int buffer_size;
 	mm_util_img_rotate_type angle;
 } imgp_info_s;
 
@@ -153,10 +154,10 @@ typedef struct
 	unsigned int dst_width;
 	unsigned int dst_height;
 	mm_util_rotation_e dst_rotation;
-
 	bool hardware_acceleration;
 	mm_util_cb_s *_util_cb;
 	bool is_completed;
+	bool is_finish;
 
 	tbm_bufmgr tbm;
 	tbm_bo src_bo;
@@ -166,21 +167,25 @@ typedef struct
 	unsigned int dst_key;
 	tbm_bo_handle dst_bo_handle;
 
+	bool set_convert;
+	bool set_crop;
+	bool set_resize;
+	bool set_rotate;
+
 	/* Src paramters */
 	guint src_buf_size; /**< for a standard colorspace format */
 	/* Dst paramters */
 	guint dst_buf_size;
-
-	/* Properties */
 
 	/* DRM/GEM information */
 	guint src_buf_idx;
 	guint dst_buf_idx;
 
 	/* for multi instance */
-	GMutex * instance_lock;
-	GMutex *fd_lock;
-	GMutex *buf_idx_lock;
+	GCond thread_cond;
+	GMutex thread_mutex;
+	GThread* thread;
+	GAsyncQueue *queue;
 } mm_util_s;
 
 #ifdef __cplusplus

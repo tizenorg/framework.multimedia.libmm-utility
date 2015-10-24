@@ -16,7 +16,7 @@ libmmutil_jpeg_la_CFLAGS = -I$(srcdir)/include \
 				$(SYSTEMINFO_CFLAGS) \
 				$(srcdir)/../imgp/libmmutil_imgp.la
 
-libmmutil_jpeg_la_LIBADD = $(MMCOMMON_LIBS) -ljpeg -ldl -lexif\
+libmmutil_jpeg_la_LIBADD = $(MMCOMMON_LIBS) -ljpeg -ldl -lexif -lttrace\
 				$(GLIB_LIBS) \
 				$(GMODULE_LIBS) \
 				$(SYSTEMINFO_LIBS)\

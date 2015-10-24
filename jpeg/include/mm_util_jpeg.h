@@ -61,6 +61,17 @@ typedef enum
 } mm_util_jpeg_yuv_format;
 
 /**
+ * downscale decoding for jpeg
+ */
+typedef enum
+{
+	MM_UTIL_JPEG_DECODE_DOWNSCALE_1_1 = 1,	/** 1/1 downscale decode */
+	MM_UTIL_JPEG_DECODE_DOWNSCALE_1_2 = 2,	/** 1/2 downscale decode */
+	MM_UTIL_JPEG_DECODE_DOWNSCALE_1_4 = 4,	/** 1/4 downscale decode */
+	MM_UTIL_JPEG_DECODE_DOWNSCALE_1_8 = 8,	/** 1/8 downscale decode */
+} mm_util_jpeg_decode_downscale;
+
+/**
  * YUV data
  */
 typedef struct
@@ -88,7 +99,7 @@ typedef struct
  * @since       R1, 1.0
  */
 int
-mm_util_jpeg_encode_to_file (char *filename, void *src, int width, int height, mm_util_jpeg_yuv_format fmt, int quality);
+mm_util_jpeg_encode_to_file (const char *filename, void *src, int width, int height, mm_util_jpeg_yuv_format fmt, int quality);
 
 
 /**
@@ -124,7 +135,7 @@ mm_util_jpeg_encode_to_memory (void **mem, int *size, void *src, int width, int 
  * @since       R1, 1.0
  */
 int
-mm_util_decode_from_jpeg_file(mm_util_jpeg_yuv_data *decoded, char *filename, mm_util_jpeg_yuv_format fmt);
+mm_util_decode_from_jpeg_file(mm_util_jpeg_yuv_data *decoded, const char *filename, mm_util_jpeg_yuv_format fmt);
 
 
 /**
@@ -142,6 +153,40 @@ mm_util_decode_from_jpeg_file(mm_util_jpeg_yuv_data *decoded, char *filename, mm
  */
 int
 mm_util_decode_from_jpeg_memory (mm_util_jpeg_yuv_data *decoded, void *src, int size, mm_util_jpeg_yuv_format fmt);
+
+/**
+ * This function extracts yuv data from jpeg file with downscale decode option
+ *
+ * @param decoded [out]     pointer of output stream pointer, that is, pointer of encoded jpeg stream pointer.
+                            After using it, please free the allocated memory.
+ * @param filename [in]     input file name, encoded stream file
+ * @param fmt [in]          color format
+ * @param downscale [in]       downscale value
+ * @return This function returns zero on success, or negative value with error code.
+ * @remark
+ * @see         mm_util_jpeg_yuv_data, mm_util_jpeg_yuv_format
+ * @since       R1, 1.0
+ */
+int
+mm_util_decode_from_jpeg_file_with_downscale(mm_util_jpeg_yuv_data *decoded, const char *filename, mm_util_jpeg_yuv_format fmt, mm_util_jpeg_decode_downscale downscale);
+
+/**
+ * This function extracts yuv data from jpeg buffer with downscale decode option
+ *
+ * @param decoded [out]     pointer of output stream pointer, that is, pointer of encoded jpeg stream pointer.
+                            After using it, please free the allocated memory.
+ * @param src [in]          input stream pointer(pointer of encoded jpeg stream data)
+ * @param size [in]         size of input stream(size of pointer of encoded jpeg stream data)
+ * @param fmt [in]          color format
+ * @param downscale [in]       downscale value
+ * @return This function returns zero on success, or negative value with error code.
+ * @remark
+ * @see         mm_util_jpeg_yuv_data, mm_util_jpeg_yuv_format
+ * @since       R1, 1.0
+ */
+int
+mm_util_decode_from_jpeg_memory_with_downscale (mm_util_jpeg_yuv_data *decoded, void *src, int size, mm_util_jpeg_yuv_format fmt, mm_util_jpeg_decode_downscale downscale);
+
 
 #ifdef __cplusplus
 }

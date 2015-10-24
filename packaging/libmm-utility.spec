@@ -1,6 +1,6 @@
 Name:       libmm-utility
 Summary:    Multimedia Framework Utility Library
-Version:    0.34
+Version:    0.53
 Release:    0
 Group:      System/Libraries
 License:    Apache-2.0
@@ -16,6 +16,7 @@ BuildRequires:  pkgconfig(capi-media-tool)
 BuildRequires:  pkgconfig(libtbm)
 BuildRequires:  pkgconfig(libexif)
 BuildRequires:  pkgconfig(capi-system-info)
+BuildRequires:  pkgconfig(ttrace)
 BuildRoot:  %{_tmppath}/%{name}-%{version}-build
 
 %description
@@ -40,8 +41,11 @@ Requires:   %{name} = %{version}-%{release}
 
 %build
 ./autogen.sh
-
-CFLAGS="$CFLAGS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" -D_MM_PROJECT_FLOATER" \
+export CFLAGS+=" -Wextra -Wno-array-bounds"
+export CFLAGS+=" -Wno-ignored-qualifiers -Wno-unused-parameter -Wshadow"
+export CFLAGS+=" -Wwrite-strings -Wswitch-default"
+export CFLAGS+=" -Werror"
+CFLAGS="$CFLAGS -DENABLE_TTRACE -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" -D_MM_PROJECT_FLOATER" \
 LDFLAGS+="-Wl,--rpath=%{_prefix}/lib -Wl,--hash-style=both -Wl,--as-needed" \
 ./configure --prefix=%{_prefix}
 
