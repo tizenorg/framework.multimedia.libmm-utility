@@ -1992,7 +1992,10 @@ EXPORT_API int mm_util_rotate_image(const unsigned char *src, unsigned int src_w
 		}
 	}
 
-	ret = __mm_util_get_buffer_size(src_format, *dst_width, *dst_height, &output_buffer_size);
+	if (((angle == MM_UTIL_ROTATE_90) || (angle == MM_UTIL_ROTATE_270)) && (src_format == MM_UTIL_IMG_FMT_RGB888))
+		ret = __mm_util_get_buffer_size(src_format, *dst_height, *dst_width, &output_buffer_size);
+	else
+		ret = __mm_util_get_buffer_size(src_format, *dst_width, *dst_height, &output_buffer_size);
 	if (ret != MM_ERROR_NONE) {
 		debug_error("__mm_set_imgp_info_s failed");
 		__mm_util_imgp_finalize(_module, _imgp_info_s);
